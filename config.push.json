@@ -1,0 +1,13 @@
+{
+  "gcm": {
+    "apiKey": "AIzaSyDdz3PuYl8MLGOXI_dhnOdHTyRcn3l0bhQ",
+    "projectNumber": 15655875392
+  },
+  "production": true,
+  "badge": true,
+  "sound": true,
+  "alert": true,
+  "vibrate": true,
+  "icon": "icon",
+  "iconColor": "#FF1744"
+}
