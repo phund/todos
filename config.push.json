@@ -1,9 +1,21 @@
 {
+  "apn": {
+    "passphrase": "frt123456",  
+    "key": "ios/apn-production/Certificates.pem",
+    "cert": "ios/apn-production/todos.pem",
+    "gateway": "gateway.push.apple.com"
+  },
+  "apn-dev": {
+    "passphrase": "frt123456",
+    "key": "ios/apn-development/Certificates.pem",
+    "cert": "ios/apn-development/todos.pem",
+    "gateway": "gateway.sandbox.push.apple.com"
+  },  
   "gcm": {
     "apiKey": "AIzaSyACJb7GJVAYGpek3vAGh4lY30gUjcs79Xk",
     "projectNumber": 15655875392
   },
-  "production": true,
+  "production": false,
   "badge": true,
   "sound": true,
   "alert": true,
