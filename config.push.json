@@ -1,8 +1,8 @@
 {
   "apn": {
     "passphrase": "frt123456",  
-    "key": "ios/apn-production/todos-prd.pem",
-    "cert": "ios/apn-production/Certificates-prd.pem",
+    "key": "ios/apn-production/todos_prd_key.pem",
+    "cert": "ios/apn-production/todos_prd_cer.pem",
     "gateway": "gateway.push.apple.com"
   },
   "apn-dev": {
@@ -15,7 +15,7 @@
     "apiKey": "AIzaSyACJb7GJVAYGpek3vAGh4lY30gUjcs79Xk",
     "projectNumber": 15655875392
   },
-  "production": false,
+  "production": true,
   "badge": true,
   "sound": true,
   "alert": true,
