@@ -21,7 +21,7 @@ Meteor.startup(function () {
     preventDefaultEvents: false
   });
 
-  Push.addListen('token', function(token) {
+  Push.addListener('token', function(token) {
     alert("Token: " + token);
   });
 
