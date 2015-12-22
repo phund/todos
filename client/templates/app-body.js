@@ -21,6 +21,46 @@ Meteor.startup(function () {
     preventDefaultEvents: false
   });
 
+  Push.addListen('token', function(token) {
+    alert("Token: " + token);
+  });
+
+  Push.addListener('error', function(err) {
+    if (error.type == 'apn.cordova') {
+       alert("Error: " + err.error);
+    }
+  });
+
+  Push.addListener('register', function(evt) {
+    // Platform specific event - not really used
+    alert("Register: ");
+  });
+
+  Push.addListener('alert', function(notification) {
+    // Called when message got a message in forground
+    alert("Alert when get message in forground: " + notification);
+  });
+
+  Push.addListener('sound', function(notification) {
+    // Called when message got a sound
+    alert("Called when message got a sound");
+  });
+
+  Push.addListener('badge', function(notification) {
+    // Called when message got a badge
+    alert("Called when message got a badge");
+  });
+
+  Push.addListener('startup', function(notification) {
+    // Called when message recieved on startup (cold+warm)
+    alert("Called when message recieved on startup (cold+warm)");
+  });
+
+  Push.addListener('message', function(notification) {
+    // Called on every message
+    alert("Called on every message");
+  });
+
   // Only show the connection error box if it has been 5 seconds since
   // the app started
   setTimeout(function () {
