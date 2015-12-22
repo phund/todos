@@ -20,5 +20,6 @@
   "sound": true,
   "alert": true,
   "vibrate": true,
-  "iconColor": "#FF1744"
+  "icon": "pushicon",
+  "iconColor": "#FF00FF"
 }
