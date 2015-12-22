@@ -46,10 +46,11 @@ Meteor.startup(function () {
   //   alert("Called when message got a sound");
   // });
 
-  // Push.addListener('badge', function(notification) {
-  //   // Called when message got a badge
-  //   alert("Called when message got a badge");
-  // });
+  Push.addListener('badge', function(notification) {
+    // Called when message got a badge
+    alert("Called when message got a badge");
+    cordova.plugins.notification.badge.set(notification.badge);
+  });
 
   // Push.addListener('startup', function(notification) {
   //   // Called when message recieved on startup (cold+warm)
