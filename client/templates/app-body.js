@@ -49,7 +49,7 @@ Meteor.startup(function () {
   Push.addListener('badge', function(notification) {
     // Called when message got a badge
     alert("Called when message got a badge" + JSON.stringify(notification));
-    cordova.plugins.notification.badge.set(notification.badge);
+    cordova.plugins.notification.badge.set(notification.count);
   });
 
   // Push.addListener('startup', function(notification) {
