@@ -66,7 +66,8 @@ Meteor.startup(function () {
       sound_url = cordova.file.applicationDirectory.replace('file://', '') + 'sound/alert.mp3';
     }
     new Media(sound_url).play();
-    alert("Called on every message");
+    // alert("Called on every message");
+    console.log("Called on every message");
   });
 
   // Only show the connection error box if it has been 5 seconds since
