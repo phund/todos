@@ -58,15 +58,17 @@ Meteor.startup(function () {
 
   Push.addListener('message', function(notification) {
     // Called on every message
+    alert("Called on every message");
     var sound_url = '';
     if (device.platform.toLowerCase() === "android") {
-      sound_url = cordova.file.applicationDirectory.replace('file://', '') + 'www/application/sound/alert.mp3';
+      sound_url = cordova.file.applicationDirectory.replace('file://', '') + 'www/application/app/sound/alert.mp3';
     }
     else {
       sound_url = cordova.file.applicationDirectory.replace('file://', '') + 'sound/alert.mp3';
     }
-    new Media(sound_url).play();
-    // alert("Called on every message");
+    var playSound = new Media(sound_url);
+    playSound.play();
+    
     console.log("Called on every message");
   });
 
