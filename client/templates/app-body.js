@@ -58,7 +58,14 @@ Meteor.startup(function () {
 
   Push.addListener('message', function(notification) {
     // Called on every message
-    new Audio('sound/alert.mp3').play();
+    var sound_url = '';
+    if (device.platform.toLowerCase() === "android") {
+      sound_url = cordova.file.applicationDirectory.replace('file://', '') + 'www/application/sound/alert.mp3';
+    }
+    else {
+      sound_url = cordova.file.applicationDirectory.replace('file://', '') + 'sound/alert.mp3';
+    }
+    new Media(sound_url).play();
     alert("Called on every message");
   });
 
