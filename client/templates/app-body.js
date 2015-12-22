@@ -36,10 +36,10 @@ Meteor.startup(function () {
   //   alert("Register: ");
   // });
 
-  // Push.addListener('alert', function(notification) {
-  //   // Called when message got a message in forground
-  //   alert("Alert when get message in forground: " + notification);
-  // });
+  Push.addListener('alert', function(notification) {
+    // Called when message got a message in forground
+    alert("Alert when get message in forground: " + notification);
+  });
 
   // Push.addListener('sound', function(notification) {
   //   // Called when message got a sound
@@ -58,8 +58,8 @@ Meteor.startup(function () {
 
   Push.addListener('message', function(notification) {
     // Called on every message
-    // alert("Called on every message");
-    alert = new Audio('sound/alert.mp3').play();
+    // new Audio('sound/alert.mp3').play();
+    alert("Called on every message");
   });
 
   // Only show the connection error box if it has been 5 seconds since
