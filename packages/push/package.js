@@ -14,7 +14,7 @@ Npm.depends({
 
 Cordova.depends({
   'phonegap-plugin-push': '1.3.0',
-  'cordova-plugin-badge': '0.7.1'
+  'de.appplant.cordova.plugin.badge': '0.7.1'
 });
 
 Package.registerBuildPlugin({
