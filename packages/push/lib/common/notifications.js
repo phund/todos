@@ -1,6 +1,10 @@
 // Notifications collection
 Push.notifications = new Mongo.Collection('_raix_push_notifications');
 
+if (Meteor.isServer) {
+  Push.notifications._ensureIndex({createdAt: 1});
+}
+
 // This is a general function to validate that the data added to notifications
 // is in the correct format. If not this function will throw errors
 var _validateDocument = function(notification) {
@@ -12,10 +16,28 @@ var _validateDocument = function(notification) {
     text: String,
     badge: Match.Optional(Number),
     sound: Match.Optional(String),
+    notId: Match.Optional(Match.Integer),
+    apn: Match.Optional({
+      from: Match.Optional(String),
+      title: Match.Optional(String),
+      text: Match.Optional(String),
+      badge: Match.Optional(Number),
+      sound: Match.Optional(String),
+      notId: Match.Optional(Match.Integer)
+    }),
+    gcm: Match.Optional({
+      from: Match.Optional(String),
+      title: Match.Optional(String),
+      text: Match.Optional(String),
+      badge: Match.Optional(Number),
+      sound: Match.Optional(String),
+      notId: Match.Optional(Match.Integer)
+    }),
     query: Match.Optional(String),
     token: Match.Optional(_matchToken),
     tokens: Match.Optional([_matchToken]),
     payload: Match.Optional(Object),
+    delayUntil: Match.Optional(Date),
     createdAt: Date,
     createdBy: Match.OneOf(String, null)
   });
@@ -38,18 +60,21 @@ Push.send = function(options) {
           Meteor.isServer && (options.createdBy || '<SERVER>') || null;
 
   // Rig the notification object
-  var notification = {
-    from: options.from,
-    title: options.title,
-    text: options.text,
+   var notification = _.extend({
     createdAt: new Date(),
     createdBy: currentUser
-  };
+  }, _.pick(options, 'from', 'title', 'text'));
 
-  // Add extra
-  if (typeof options.payload !== 'undefined') notification.payload = options.payload;
-  if (typeof options.badge !== 'undefined') notification.badge = options.badge;
-  if (typeof options.sound !== 'undefined') notification.sound = options.sound;
+   // Add extra
+   _.extend(notification, _.pick(options, 'payload', 'badge', 'sound', 'notId', 'delayUntil'));
+
+  if (Match.test(options.apn, Object)) {
+    notification.apn = _.pick(options.apn, 'from', 'title', 'text', 'badge', 'sound', 'notId');
+  }
+
+  if (Match.test(options.gcm, Object)) {
+    notification.gcm = _.pick(options.gcm, 'from', 'title', 'text', 'badge', 'sound', 'notId');
+  }
 
   // Set one token selector, this can be token, array of tokens or query
   if (options.query) {

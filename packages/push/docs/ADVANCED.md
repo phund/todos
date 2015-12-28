@@ -88,7 +88,13 @@ Add a `config.push.json` file in your project and configure credentials / keys /
     "apiKey": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
     "projectNumber": xxxxxxxxxxxx
   },
-  "production": true
+  "production": true,
+  // "badge": true,
+  // "sound": true,
+  // "alert": true,
+  // "vibrate": true,
+  // "sendInterval": 15000,  Configurable interval between sending notifications
+  // "sendBatchSize": 1  Configurable number of notifications to send per batch
 }
 ```
 
@@ -173,6 +179,8 @@ The 4th parameter is a selection query for determining who the message should be
 
 `tokens` is simply and array of tokens from the previous example
 
+`delayUntil` is an optional Date. If set, sending will be delayed until then.
+
 The query selector is used against a Mongo Collection created by the push packahe called `Push.appCollection`. This collection stores the userIds, pushIds, and tokens of all devices that register with the server. With a desired selection query chosen a minimal `Push.send` takes the following form (using one of the queries). 
 
 ```js
@@ -182,9 +190,40 @@ Push.send({
   text: 'World',
   query: {}
   token: {}
-  tokens: [{},{}] 
+  tokens: [{},{}]
+  delayUntil: new Date(),
+  notId: numberId
 });
 ```
+#### Display multiple notifications on Android
+ * `notId` : a unique identifier for a GCM message
+
+'notId' supplies a unique id to Cordova Push plugin for 'tag' field in GCM (Android) allowing a per message id, this can be used to replace unread message on both server and client. It differs from collapseKey which only collapses undelivered messages server side. Defaults to a value of zero, must be 32 bit Integer
+If `notId` is not set then the Push plugin defaults to a value of 0 causing each message to overwrite the previous and only ever display a single notification.
+
+#### Overwriting platform specific values
+If needed it's possible to specify values pr. platform `apn`/`gcm` in the send.
+Eg.:
+```js
+Push.send({
+  from: 'Test',
+  title: 'Hello',
+  text: 'World',
+  apn: {
+    // apn specific overwrites
+    title: 'sent via apn'
+  },
+  gcm: {
+    // gcm specific overwrites
+    title: 'sent via gcm'
+  },
+  query: {}
+  token: {}
+  tokens: [{},{}]
+  delayUntil: new Date()
+});
+```
+*You can overwrite keys: 'from','title','text','badge','sound' and 'notId'*
 
 ### Client Security
 This package allows you to send notifications from the server and client. To restrict the client or allowing the client to send use `allow` or `deny` rules.

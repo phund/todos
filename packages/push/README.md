@@ -23,7 +23,9 @@ Depending on the platforms you want to work with you will need some credentials 
 
 Have a look at the [Basic example](docs/BASIC.md)
 
-Or check out the [DEMO](https://github.com/elvismercado/meteor-raix-push-demo) by @elvismercado
+Read the [raix:push Newbie Manual](https://github.com/raix/push/issues/115) by [@harryward](https://github.com/harryward)
+
+Or check out the [DEMO](https://github.com/elvismercado/meteor-raix-push-demo) by [@elvismercado](https://github.com/elvismercado)
 
 ## Config
 Add a `config.push.json` file in your project and configure credentials / keys / certificates:
@@ -48,7 +50,9 @@ Add a `config.push.json` file in your project and configure credentials / keys /
   // "badge": true,
   // "sound": true,
   // "alert": true,
-  // "vibrate": true
+  // "vibrate": true,
+  // "sendInterval": 15000,  Configurable interval between sending notifications
+  // "sendBatchSize": 1  Configurable number of notifications to send per batch
 }
 ```
 *Note: This file should be pure json, comments are not supported*
@@ -61,6 +65,7 @@ Add a `config.push.json` file in your project and configure credentials / keys /
         from: 'push',
         title: 'Hello',
         text: 'world',
+        badge: 1, //optional, use it to set badge count of the receiver when the app is in background.
         query: {
             // Ex. send to a specific user if using accounts:
             userId: 'xxxxxxxxx'
@@ -68,6 +73,7 @@ Add a `config.push.json` file in your project and configure credentials / keys /
         // token: appId or token eg. "{ apn: token }"
         // tokens: array of appId's or tokens
         // payload: user data
+        // delayUntil: Date
     });
 ```
 *When in secure mode the client send features require adding allow/deny rules in order to allow the user to send push messages to other users directly from the client - Read more below*

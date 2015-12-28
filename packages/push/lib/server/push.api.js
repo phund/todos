@@ -42,14 +42,14 @@ Push.Configure = function(options) {
         // console.log('Replace token: ' + currentToken + ' -- ' + newToken);
         // If the server gets a token event its passing in the current token and
         // the new value - if new value is undefined this empty the token
-        self.emit('token', currentToken, newToken);
+        self.emitState('token', currentToken, newToken);
     };
 
     // Rig the removeToken callback
     _removeToken = function(token) {
         // console.log('Remove token: ' + token);
         // Invalidate the token
-        self.emit('token', token, null);
+        self.emitState('token', token, null);
     };
 
 
@@ -125,6 +125,10 @@ Push.Configure = function(options) {
         // shutdown/close it.
 
         self.sendAPN = function(userToken, notification) {
+            if (Match.test(notification.apn, Object)) {
+              notification = _.extend({}, notification, notification.apn);
+            }
+
             // console.log('sendAPN', notification.from, userToken, notification.title, notification.text, notification.badge, notification.priority);
             var priority = (notification.priority || notification.priority === 0)? notification.priority : 10;
 
@@ -135,6 +139,10 @@ Push.Configure = function(options) {
             note.expiry = Math.floor(Date.now() / 1000) + 3600; // Expires 1 hour from now.
             if (typeof notification.badge !== 'undefined') note.badge = notification.badge;
             if (typeof notification.sound !== 'undefined') note.sound = notification.sound;
+
+            // adds category support for iOS8 custom actions as described here:
+            // https://developer.apple.com/library/ios/documentation/NetworkingInternet/Conceptual/RemoteNotificationsPG/Chapters/IPhoneOSClientImp.html#//apple_ref/doc/uid/TP40008194-CH103-SW36
+            if (typeof notification.category !== 'undefined') note.category = notification.category;
 
             note.alert = notification.text;
             // Allow the user to set payload data
@@ -182,6 +190,10 @@ Push.Configure = function(options) {
         if (Push.debug) console.log('GCM configured');
         //self.sendGCM = function(options.from, userTokens, options.title, options.text, options.badge, options.priority) {
         self.sendGCM = function(userTokens, notification) {
+            if (Match.test(notification.gcm, Object)) {
+              notification = _.extend({}, notification, notification.gcm);
+            }
+
             // Make sure userTokens are an array of strings
             if (userTokens === ''+userTokens) userTokens = [userTokens];
 
@@ -205,6 +217,7 @@ Push.Configure = function(options) {
             // Set extra details
             if (typeof notification.badge !== 'undefined') data.msgcnt = notification.badge;
             if (typeof notification.sound !== 'undefined') data.soundname = notification.sound;
+            if (typeof notification.notId !== 'undefined') data.notId = notification.notId;
 
             //var message = new gcm.Message();
             var message = new gcm.Message({
@@ -439,86 +452,91 @@ Push.Configure = function(options) {
 
     Meteor.setInterval(function() {
 
-        if (!isSendingNotification) {
-            // Set send fence
-            isSendingNotification = true;
+        if (isSendingNotification) {
+            return;
+        }
+        // Set send fence
+        isSendingNotification = true;
 
-            // Find one notification that is not being or already sent
-            var notification = Push.notifications.findOne({ $and: [
+        var countSent = 0;
+        var batchSize = options.sendBatchSize || 1;
+
+        // Find notifications that are not being or already sent
+        var pendingNotifications = Push.notifications.find({ $and: [
               // Message is not sent
               { sent : { $ne: true } },
               // And not being sent by other instances
-              { sending: {$ne: true} },
+              { sending: { $ne: true } },
+              // And not queued for future
+              { $or: [ { delayUntil: { $exists: false } }, { delayUntil:  { $lte: new Date() } } ] }
+		      ]}, {
+            // Sort by created date
+            sort: { createdAt: 1 },
+            limit: batchSize
+          });
+
+        pendingNotifications.forEach(function(notification) {
+            // Reserve notification
+            var reserved = Push.notifications.update({ $and: [
+              // Try to reserve the current notification
+              { _id: notification._id },
+              // Make sure no other instances have reserved it
+              { sending: { $ne: true } }
             ]}, {
-              // Sort by created date
-              sort: { createdAt: 1 }
+              $set: {
+                // Try to reserve
+                sending: true
+              }
             });
 
-            // Check if we got any notifications to send
-            if (notification) {
+            // Make sure we only handle notifications reserved by this
+            // instance
+            if (reserved) {
 
-                // Reserve notification
-                var reserved = Push.notifications.update({ $and: [
-                  // Try to reserve the current notification
-                  { _id: notification._id },
-                  // Make sure no other instances have reserved it
-                  { sending: { $ne: true } }
-                ]}, {
-                  $set: {
-                    // Try to reserve
-                    sending: true
-                  }
-                });
+              // Check if query is set and is type String
+              if (notification.query && notification.query === ''+notification.query) {
+                try {
+                  // The query is in string json format - we need to parse it
+                  notification.query = JSON.parse(notification.query);
+                } catch(err) {
+                  // Did the user tamper with this??
+                  throw new Error('Push: Error while parsing query string, Error: ' + err.message);
+                }
+              }
 
-                // Make sure we only handle notifications reserved by this
-                // instance
-                if (reserved) {
+              // Send the notification
+              var result = Push.serverSend(notification);
 
-                  // Check if query is set and is type String
-                  if (notification.query && notification.query === ''+notification.query) {
-                    try {
-                      // The query is in string json format - we need to parse it
-                      notification.query = JSON.parse(notification.query);
-                    } catch(err) {
-                      // Did the user tamper with this??
-                      throw new Error('Push: Error while parsing query string, Error: ' + err.message);
-                    }
-                  }
+              if (!options.keepNotifications) {
+                  // Pr. Default we will remove notifications
+                  Push.notifications.remove({ _id: notification._id });
+              } else {
 
-                  // Send the notification
-                  var result = Push.serverSend(notification);
+                  // Update the notification
+                  Push.notifications.update({ _id: notification._id }, {
+                      $set: {
+                        // Mark as sent
+                        sent: true,
+                        // Set the sent date
+                        sentAt: new Date(),
+                        // Count
+                        count: result,
+                        // Not being sent anymore
+                        sending: false
+                      }
+                  });
 
-                  if (!options.keepNotifications) {
-                      // Pr. Default we will remove notifications
-                      Push.notifications.remove({ _id: notification._id });
-                  } else {
+              }
 
-                      // Update the notification
-                      Push.notifications.update({ _id: notification._id }, {
-                          $set: {
-                            // Mark as sent
-                            sent: true,
-                            // Set the sent date
-                            sentAt: new Date(),
-                            // Count
-                            count: result,
-                            // Not being sent anymore
-                            sending: false
-                          }
-                      });
+              // Emit the send
+              self.emit('send', { notification: notification._id, result: result });
 
-                  }
+            } // Else could not reserve
 
-                  // Emit the send
-                  self.emit('send', { notification: notification._id, result: result });
+        }); // EO forEach
 
-                } // Else could not reserve
-
-            }
-
-            // Remove the send fence
-            isSendingNotification = false;
-        }
-    }, options.sendInterval || 15000); // Default every 15'the sec
+        // Remove the send fence
+        isSendingNotification = false;
+    }, options.sendInterval || 15000); // Default every 15th sec
 
 };
