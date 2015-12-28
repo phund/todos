@@ -28,6 +28,8 @@ Push.setBadge = function(count) {
         Push.emit('error', { type: 'badge', error: err });
       }, count);
 
+      cordova.plugins.notification.badge.set(count);
+
     }
   });
 };
