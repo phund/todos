@@ -1,21 +1,15 @@
-/* global chrome: false */
 var onNotification = function(notification) {
   // alert('onNotification' + JSON.stringify(notification));
 
   // Emit alert event - this requires the app to be in forground
-  if (notification.message && notification.foreground) {
+  if (notification.message && notification.foreground)
     Push.emit('alert', notification);
-  }
 
   // Emit sound event
-  if (notification.sound) {
-    Push.emit('sound', notification);
-  }
+  if (notification.sound) Push.emit('sound', notification);
 
   // Emit badge event
-  if (notification.badge) {
-    Push.emit('badge', notification);
-  }
+  if (notification.badge) Push.emit('badge', notification);
 
   // If within thres
   if (notification.open) {
@@ -25,7 +19,7 @@ var onNotification = function(notification) {
   }
 };
 
-Push.setBadge = function(/* count */) {
+Push.setBadge = function(count) {
   // XXX: Not implemented
 };
 
@@ -47,16 +41,13 @@ Push.Configure = function(options) {
   // });
 
   // Block multiple calls
-  if (isConfigured) {
+  if (isConfigured)
     throw new Error('Push.Configure should not be called more than once!');
-  }
 
   isConfigured = true;
 
   // Add debug info
-  if (Push.debug) {
-    console.log('Push.Configure', options);
-  }
+  if (Push.debug) console.log('Push.Configure', options);
 
   // Client-side security warnings
   checkClientSecurity(options);
@@ -81,9 +72,7 @@ Push.Configure = function(options) {
     var _parsePayload = function(value) {
       // Android actually parses payload into an object - this is not the case with
       // iOS (here is it just a string)
-      if (value !== ''+value) {
-        value = JSON.stringify(value);
-      }
+      if (value !== ''+value) value = JSON.stringify(value);
 
       // Run the string through ejson
       try {
@@ -115,15 +104,13 @@ Push.Configure = function(options) {
 
       options.iframe.addEventListener('pushLaunch', function(e) {
 
-        if (e.event === 'message') {
+        if (e.event == 'message') {
           // Android event
 
           var sound = e.soundname || e.payload.sound;
 
           // Only prefix sound if actual text found
-          if (sound && sound.length) {
-            sound = '/android_asset/www/' + sound;
-          }
+          if (sound && sound.length) sound = '/android_asset/www/' + sound;
 
           // XXX: Investigate if we need more defaults
           var unifiedMessage = {
@@ -132,34 +119,30 @@ Push.Configure = function(options) {
             badge: e.payload.msgcnt,
             // Coldstart on android is a bit inconsistent - its only set when the
             // notification opens the app
-            coldstart: (e.coldstart === Boolean(e.coldstart)) ? e.coldstart : coldstart,
+            coldstart: (e.coldstart === !!e.coldstart) ? e.coldstart : coldstart,
             background: !e.foreground,
             foreground: !!e.foreground,
             // open: _atStartup(),  // This is the iOS implementation
-            open: (e.coldstart === Boolean(e.coldstart)), // If set true / false its an open event
+            open: (e.coldstart === !!e.coldstart), // If set true / false its an open event
             type: 'gcm.cordova'
           };
 
           // If payload.ejson this is an object - we hand it over to parsePayload,
           // parsePayload will do the convertion for us
-          if (e.payload.ejson) {
-            unifiedMessage.payload = _parsePayload(e.payload.ejson);
-          }
+          if (e.payload.ejson) unifiedMessage.payload = _parsePayload(e.payload.ejson);
 
           // Trigger notification
           onNotification(unifiedMessage);
 
         } else {
           // iOS event
-          var sound = e.sound; // jshint ignore: line
+          var sound = e.sound;
 
           // Only prefix sound if actual text found
-          if (sound && sound.length) {
-            sound = '' + sound;
-          }
+          if (sound && sound.length) sound = '' + sound;
 
           // XXX: Investigate if we need more defaults
-          var unifiedMessage = { // jshint ignore: line
+          var unifiedMessage = {
             message: e.alert,
             sound: sound,
             badge: e.badge,
@@ -171,9 +154,7 @@ Push.Configure = function(options) {
           };
 
           // E.ejson should be a string - we send it directly to payload
-          if (e.ejson) {
-            unifiedMessage.payload = _parsePayload(e.ejson);
-          }
+          if (e.ejson) unifiedMessage.payload = _parsePayload(e.ejson);
 
           // Trigger notification
           onNotification(unifiedMessage);
@@ -191,10 +172,10 @@ Push.Configure = function(options) {
       options.iframe.addEventListener('pushToken', function(evt) {
         if (evt.androidToken) {
           // Format the android token
-          Push.emitState('token', { gcm: evt.androidToken });
+          Push.emit('token', { gcm: evt.androidToken });
         } else if (evt.iosToken) {
           // Format the ios token
-          Push.emitState('token', { apn: evt.iosToken });
+          Push.emit('token', { apn: evt.iosToken });
         }
       });
 
@@ -212,16 +193,15 @@ Push.Configure = function(options) {
     // Set max message size
     // chrome.gcm.MAX_MESSAGE_SIZE = 4096;
 
-    if (options.gcm.projectNumber) {
+    if (options.gcm.projectNumber)
       chrome.gcm.register(options.gcm.projectNumber, function(token) {
         if (token) {
-          self.emitState('token', { gcm: token });
+          self.emit('token', { gcm: token });
         } else {
           // Error
           self.emit('error', { type: 'gcm.browser', error: 'Access denied' });
         }
       });
-    }
 
   } else if ('safari' in window && 'pushNotification' in window.safari) {
     // https://developer.apple.com/library/mac/documentation/NetworkingInternet/Conceptual/NotificationProgrammingGuideForWebsites/PushNotifications/PushNotifications.html#//apple_ref/doc/uid/TP40013225-CH3-SW1
@@ -253,7 +233,7 @@ Push.Configure = function(options) {
               // alert('granted');
               // The web service URL is a valid push provider, and the user said yes.
               // permissionData.deviceToken is now available to use.
-              self.emitState('token', { apn: permissionData.deviceToken });
+              self.emit('token', { apn: permissionData.deviceToken });
           }
       };
 
@@ -273,7 +253,7 @@ Push.Configure = function(options) {
       setupAppRegistrations();
     });
 
-    function setupAppRegistrations() { // jshint ignore: line
+    function setupAppRegistrations() {
       // Issue a register() call
       // to register to listen for a notification,
       // you simply call push.register
@@ -285,20 +265,20 @@ Push.Configure = function(options) {
         // Store the endpoint
         pushEndpoint = e.target.result;
 
-        self.emitState('token', {
+        self.emit('token', {
           SimplePush: {
             channel: channel,
             endPoint: pushEndpoint
           }
         });
-      };
+      }
 
     }
 
     // Once we've registered, the AppServer can send version pings to the EndPoint.
     // This will trigger a 'push' message to be sent to this handler.
     navigator.mozSetMessageHandler('push', function(message) {
-        if (message.pushEndpoint === pushEndpoint) {
+        if (message.pushEndpoint == pushEndpoint) {
           // Did we launch or were we already running?
           self.emit('startup', message);
         }
@@ -312,7 +292,7 @@ Push.Configure = function(options) {
     // error recovery mechanism
     // will be called very rarely, but application
     // should register again when it is called
-    navigator.mozSetMessageHandler('register', function(/* e */) {
+    navigator.mozSetMessageHandler('register', function(e) {
       setupAppRegistrations();
     });
 

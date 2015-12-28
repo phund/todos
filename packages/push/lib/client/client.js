@@ -45,49 +45,13 @@ var saveLocalstorage = function(data) {
 var stored = loadLocalstorage();
 // Reactive id
 var idDep = new Tracker.Dependency();
-var stateDep = new Tracker.Dependency();
 
 // Its either set by localStorage or random
 idDep.changed();
 
-var _setEnabled = function(state) {
-  if (stored.enabled !== state) {
-    stored.enabled = state;
-    // Save the stored object
-    saveLocalstorage(stored);
-    stateDep.changed();
-  }
-};
-
 Push.id = function() {
   idDep.depend();
   return stored.id;
-};
-
-Push.enabled = function(state) {
-  if (stored) {
-    if (typeof state === 'undefined') {
-      // Act as a getter
-      stateDep.depend();
-      return stored.enabled !== false;
-    } else {
-      check(state, Boolean);
-      if (state !== stored.enabled && stored.id) {
-        // Latency compensation
-        _setEnabled(state);
-        // Update server
-        Meteor.call('raix:push-enable', {
-          id: stored.id,
-          enabled: state
-        }, function(err, found) {
-          if (err || !found) {
-            // On error or missing app item, revert
-            _setEnabled(!state);
-          }
-        });
-      }
-    }
-  }
 };
 
 Push.setUser = function() {
@@ -125,48 +89,42 @@ var reportTokenToServer = function(token, appName) {
 
   // token.gcm or token.apn
   Meteor.call('raix:push-update', data, function(err, result) {
-    if (!err && result) {
+    if (err) {
+      // XXX: Got an error, retry?
+    } else {
       // The result is the id - The server may update this if it finds a
       // match for an old install
-      if (stored.id !== result._id) {
+      if (stored.id !== result) {
         // The server did match the push token for this device
-        stored.id = result._id;
+        stored.id = result;
         // Save the stored object
         saveLocalstorage(stored);
         // The id has changed.
         idDep.changed();
-      }
-
-      // Make sure enabled is also updated to keep in sync
-      if (typeof result.enabled !== 'undefined') {
-        _setEnabled(result.enabled);
       }
     }
   });
 };
 
 initPushUpdates = function(appName) {
-  Meteor.startup(function() {
-    // Start listening for tokens
-    Push.on('token', function(token) {
-      if (Push.debug) {
-        console.log('Got token:', token);
-      }
-      // The app should be ready, lets call in
-      reportTokenToServer(token, appName || 'main');
-    });
 
-    // Start listening for user updates if accounts package is added
-    if (addUserId) {
-      Tracker.autorun(function() {
-        // Depend on the userId
-        Meteor.userId();
-        // Dont run this the first time, its already done in the reportTokenToServer
-        if (!this.firstRun) {
-          // Update the userId
-          Push.setUser();
-        }
-      });
-    }
+  // Start listening for tokens
+  Push.addListener('token', function(token) {
+    // The app should be ready, lets call in
+    reportTokenToServer(token, appName || 'main');
   });
+
+  // Start listening for user updates if accounts package is added
+  if (addUserId) {
+    Tracker.autorun(function() {
+      // Depend on the userId
+      var user = Meteor.userId();
+      // Dont run this the first time, its already done in the reportTokenToServer
+      if (!this.firstRun) {
+        // Update the userId
+        Push.setUser();
+      }
+    });
+  }
+
 };

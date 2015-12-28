@@ -10,44 +10,23 @@ var _validateDocument = function(notification) {
     from: String,
     title: String,
     text: String,
-    badge: Match.Optional(Match.Integer),
+    badge: Match.Optional(Number),
     sound: Match.Optional(String),
-    notId: Match.Optional(Match.Integer),
-    contentAvailable: Match.Optional(Match.Integer),
-    apn: Match.Optional({
-      from: Match.Optional(String),
-      title: Match.Optional(String),
-      text: Match.Optional(String),
-      badge: Match.Optional(Match.Integer),
-      sound: Match.Optional(String),
-      notId: Match.Optional(Match.Integer)
-    }),
-    gcm: Match.Optional({
-      from: Match.Optional(String),
-      title: Match.Optional(String),
-      text: Match.Optional(String),
-      badge: Match.Optional(Match.Integer),
-      sound: Match.Optional(String),
-      notId: Match.Optional(Match.Integer)
-    }),
     query: Match.Optional(String),
     token: Match.Optional(_matchToken),
     tokens: Match.Optional([_matchToken]),
     payload: Match.Optional(Object),
-    delayUntil: Match.Optional(Date),
     createdAt: Date,
     createdBy: Match.OneOf(String, null)
   });
 
   // Make sure a token selector or query have been set
-  if (!notification.token && !notification.tokens && !notification.query) {
+  if (!notification.token && !notification.tokens && !notification.query)
     throw new Error('No token selector or query found');
-  }
 
   // If tokens array is set it should not be empty
-  if (notification.tokens && !notification.tokens.length) {
+  if (notification.tokens && !notification.tokens.length)
     throw new Error('No tokens in array');
-  }
 };
 
 Push.send = function(options) {
@@ -59,21 +38,18 @@ Push.send = function(options) {
           Meteor.isServer && (options.createdBy || '<SERVER>') || null;
 
   // Rig the notification object
-   var notification = _.extend({
+  var notification = {
+    from: options.from,
+    title: options.title,
+    text: options.text,
     createdAt: new Date(),
     createdBy: currentUser
-  }, _.pick(options, 'from', 'title', 'text'));
+  };
 
-   // Add extra
-   _.extend(notification, _.pick(options, 'payload', 'badge', 'sound', 'notId', 'delayUntil'));
-
-  if (Match.test(options.apn, Object)) {
-    notification.apn = _.pick(options.apn, 'from', 'title', 'text', 'badge', 'sound', 'notId');
-  }
-
-  if (Match.test(options.gcm, Object)) {
-    notification.gcm = _.pick(options.gcm, 'from', 'title', 'text', 'badge', 'sound', 'notId');
-  }
+  // Add extra
+  if (typeof options.payload !== 'undefined') notification.payload = options.payload;
+  if (typeof options.badge !== 'undefined') notification.badge = options.badge;
+  if (typeof options.sound !== 'undefined') notification.sound = options.sound;
 
   // Set one token selector, this can be token, array of tokens or query
   if (options.query) {
@@ -85,10 +61,6 @@ Push.send = function(options) {
   } else if (options.tokens) {
     // Set tokens
     notification.tokens = options.tokens;
-  }
-  //console.log(options);
-  if (typeof options.contentAvailable !== 'undefined') {
-    notification.contentAvailable = options.contentAvailable;
   }
 
   // Validate the notification

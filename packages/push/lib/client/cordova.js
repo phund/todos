@@ -1,154 +1,323 @@
-/* global device: false */
-/* global PushNotification: false */
-var getService = function() {
-  if (/android/i.test(device.platform)) {
-    return 'gcm';
-  } else if (/ios/i.test(device.platform)) {
-    return 'apn';
-  } else if (/win/i.test(device.platform)) {
-    return 'mpns';
-  }
+var coldstart = true;
+var startupTime = new Date();
+var startupThreshold = 5000; // ms
+var paused = false;
+var waitingMessage = null;
 
-  return 'unknown';
+var _atStartup = function() {
+  // If we were triggered before resume then its a startup
+  if (paused) return true;
+
+  // If startup time is less than startupThreshold ago then lets say this is
+  // at startup.
+  return (new Date() - startupTime < startupThreshold);
 };
 
-/**
- * https://github.com/phonegap/phonegap-plugin-push#pushnotificationinitoptions
- */
-class PushHandle extends EventState {
-  constructor() {
-    super();
-    this.configured = false;
-    this.debug = false;
-    this.token = null;
-  }
-  log() {
-    if (this.debug) {
-      console.log(...arguments);
+Push.setBadge = function(count) {
+  document.addEventListener('deviceready', function() {
+    // Helper
+    var pushNotification = window.plugins.pushNotification;
+
+    // If the set application badge is available
+    if (typeof pushNotification.setApplicationIconBadgeNumber == 'function') {
+      // Set the badge
+      pushNotification.setApplicationIconBadgeNumber(function(result) {
+        // Success callback
+      }, function(err) {
+        // Error callback
+        Push.emit('error', { type: 'badge', error: err });
+      }, count);
+
     }
+  });
+};
+
+_parsePayload = function(value) {
+  // Android actually parses payload into an object - this is not the case with
+  // iOS (here is it just a string)
+  if (value !== ''+value) value = JSON.stringify(value);
+
+  // Run the string through ejson
+  try {
+    return EJSON.parse(value);
+  } catch(err) {
+    return { error: err };
   }
-  setBadge(count) {
-    this.once('ready', () => {
-      if (/ios/i.test(device.platform)) {
-        this.log('Push.setBadge:', count);
-        // xxx: at the moment only supported on iOS
-        this.push.setApplicationIconBadgeNumber(() => {
-          this.log('Push.setBadge: was set to', count);
-        }, (e) => {
-          this.emit('error', {
-            type: getService() + '.cordova',
-            error: 'Push.setBadge Error: ' + e.message
-          });
-        }, count);
-      }
-      if (/android/i.test(device.platform)) {
-        this.log('Push.setBadge:', count);
-        cordova.plugins.notification.badge.set(count);
-      }
-    });
-  }
-  unregister(successHandler, errorHandler) {
-    if (this.push) {
-      this.push.unregister(successHandler, errorHandler);
+};
+
+var onNotification = function(notification) {
+  Meteor.startup(function() {
+
+    // alert('onNotification' + JSON.stringify(notification));
+
+    // Emit alert event - this requires the app to be in forground
+    if (notification.message && notification.foreground)
+      Push.emit('alert', notification);
+
+    // Emit sound event
+    if (notification.sound) Push.emit('sound', notification);
+
+    // Emit badge event
+    if (notification.badge) Push.emit('badge', notification);
+
+    // If within thres
+    if (notification.open) {
+      Push.emitState('startup', notification);
     } else {
-      errorHandler(new Error('Push.unregister, Error: "Push not configured"'));
+      Push.emit('message', notification);
     }
+
+  });
+};
+
+// handle APNS notifications for iOS
+onNotificationAPN = function(e) {
+  // alert('onNotificationAPN ' + JSON.stringify(e));
+
+  var sound = e.sound;
+
+  // Only prefix sound if actual text found
+  if (sound && sound.length) sound = 'application/' + sound;
+
+  // XXX: Investigate if we need more defaults
+  var unifiedMessage = {
+    message: e.alert,
+    sound: sound,
+    badge: e.badge,
+    coldstart: coldstart,
+    background: !e.foreground,
+    foreground: !!e.foreground,
+    open: _atStartup(),
+    type: 'apn.cordova'
+  };
+
+  // E.ejson should be a string - we send it directly to payload
+  if (e.ejson) unifiedMessage.payload = _parsePayload(e.ejson);
+
+  if (paused) {
+    waitingMessage = unifiedMessage;
+  } else {
+    // Trigger notification
+    onNotification(unifiedMessage);
   }
-  Configure(options = {}) {
+};
 
-    if (!this.configured) {
-      this.log('Push.Configure:', options);
+// handle GCM notifications for Android and Fire OS
+onNotificationGCM = function(e) {
+  // alert('onNotificationGCM ' + JSON.stringify(e));
 
-      this.configured = true;
+  switch( e.event ) {
+    case 'registered':
+      if ( e.regid.length > 0 ) {
+        Push.emit('token', { gcm: ''+e.regid } );
+      }
+    break;
 
-      Meteor.startup(() => {
+    case 'message':
 
-        if (typeof PushNotification !== 'undefined') {
+      var sound = e.soundname || e.payload.sound;
 
-          this.push = PushNotification.init(options);
+      // Only prefix sound if actual text found
+      if (sound && sound.length) sound = '/android_asset/www/application/' + sound;
 
-          this.push.on('registration', (data) => {
+      // XXX: Investigate if we need more defaults
+      var unifiedMessage = {
+        message: e.payload.message || e.msg || '',
+        sound: sound,
+        badge: e.payload.msgcnt,
+        // Coldstart on android is a bit inconsistent - its only set when the
+        // notification opens the app
+        coldstart: (e.coldstart === !!e.coldstart) ? e.coldstart : coldstart,
+        background: !e.foreground,
+        foreground: !!e.foreground,
+        // open: _atStartup(),  // This is the iOS implementation
+        open: (e.coldstart === !!e.coldstart), // If set true / false its an open event
+        type: 'gcm.cordova'
+      };
 
-            // xxx: we need to check that the token has changed before emitting
-            // a new token state - sometimes this event is triggered twice
-            if (data && data.registrationId && this.token !== data.registrationId) {
-              this.token = data.registrationId;
+      // If payload.ejson this is an object - we hand it over to parsePayload,
+      // parsePayload will do the convertion for us
+      if (e.payload.ejson) unifiedMessage.payload = _parsePayload(e.payload.ejson);
 
-              var token = {
-                [getService()]: data.registrationId
-              };
-              this.log('Push.Token:', token);
-              this.emitState('token', token);
-            }
+      if (paused) {
+        waitingMessage = unifiedMessage;
+      } else {
+        // Trigger notification
+        onNotification(unifiedMessage);
+      }
+    break;
 
-            this.emitState('registration', ...arguments);
-          });
+    case 'error':
+      // e.msg
+      Push.emit('error', { type: 'gcm.cordova', error: e });
+    break;
+  }
+};
 
-          this.push.on('notification', (data) => {
-            this.log('Push.Notification:', data);
-            // xxx: check ejson support on "additionalData" json object
+// Make sure is a global
+window.onNotificationAPN = onNotificationAPN;
+window.onNotificationGCM = onNotificationGCM;
 
-            if (data.additionalData.ejson) {
-              if (data.additionalData.ejson === ''+data.additionalData.ejson) {
-                try {
-                  data.payload = EJSON.parse(data.additionalData.ejson);
-                  this.log('Push.Parsed.EJSON.Payload:', data.payload);
-                } catch(err) {
-                  this.log('Push.Parsed.EJSON.Payload.Error', err.message, data.payload);
-                }
-              } else {
-                data.payload = EJSON.fromJSONValue(data.additionalData.ejson);
-                this.log('Push.EJSON.Payload:', data.payload);
-              }
-            }
+var rigDefaultEventListeners = function(options) {
+  // alert('RIG: ' + JSON.stringify(options));
 
-            // Emit alert event - this requires the app to be in forground
-            if (data.message && data.additionalData.foreground) {
-              this.emit('alert', data);
-            }
+  // Set default badge behaviour
+  if (options.badge === true) Push.addListener('badge', function(notification) {
+    Push.setBadge(notification.badge);
+  });
 
-            // Emit sound event
-            if (data.sound) {
-              this.emit('sound', data);
-            }
+  // Set default sound behaviour
+  if (options.sound === true) Push.addListener('sound', function(notification) {
+    if (notification.sound && notification.sound.length) {
+      if(typeof Media != 'undefined'){
+        var snd = new Media(notification.sound);
+        snd.play();
+      } else if(typeof Audio != 'undefined'){
+        var snd = new Audio(notification.sound);
+        snd.play();
+      }
+    }
+  });
 
-            // Emit badge event
-            if (typeof data.count !== 'undefined') {
-              this.log('Push.SettingBadge:', data.count);
-              this.setBadge(data.count);
-              this.emit('badge', data);
-            }
+  // Set default alert behaviour
+  if (options.alert === true) Push.addListener('alert', function(notification) {
 
-            if (data.additionalData.foreground) {
-              this.log('Push.Message: Got message while app is open:', data);
-              this.emit('message', data);
-            } else {
-              this.log('Push.Startup: Got message while app was closed/in background:', data);
-              this.emitState('startup', data);
-            }
+    // if (navigator && navigator.notification && navigator.notification.alert) {
+    //   // If native notifications installed
+    //   navigator.notification.alert(notification.message);
+    // } else {
+    //   // Use regular notification
+    //   alert(notification.message);
+    // }
+  });
 
-            this.emitState();
-          });
+  // We add a vibrate listener
+  if (options.vibrate === true) Push.addListener('message', function(notification) {
+    // Vibrate if possible
+    if (navigator && navigator.notification && navigator.notification.vibrate) {
+      // If vibrate installed
+      navigator.notification.vibrate(500);
+    }
+  });
+};
 
-          this.push.on('error', (e) => {
-            this.log('Push.Error:', e);
-            this.emit('error', {
-              type: getService() + '.cordova',
-              error: e.message
-            });
-          });
+var isConfigured = false;
 
-          this.emitState('ready');
+Push.Configure = function(options) {
+  var self = this;
+
+  // Block multiple calls
+  if (isConfigured)
+    throw new Error('Push.Configure should not be called more than once!');
+
+  isConfigured = true;
+
+  // Clean up options, make sure the projectNumber
+  if (options.gcm && !options.gcm.projectNumber)
+    throw new Error('Push.Configure gcm got no projectNumber');
+
+  // Client-side security warnings
+  checkClientSecurity(options);
+
+  // Set default options - these are needed for apn?
+  options = _.extend({
+    badge: (options.badge === true),
+    sound: (options.sound === true),
+    alert: (options.alert === true),
+    vibrate: (options.vibrate === true)
+  }, options);
+
+  // Rig default event listeners for badge/sound/alert/vibrate
+  rigDefaultEventListeners(options);
+
+  // Add debug info
+  if (Push.debug) console.log('Push.Configure', options);
+
+  // Start token updates
+  initPushUpdates(options.appName);
+
+    // Initialize on ready
+  Meteor.startup(function() {
+
+    document.addEventListener('deviceready', function() {
+
+      // At initial startup set startup time
+      startupTime = new Date();
+
+      // Update flag if app coldstart
+      document.addEventListener("pause", function() {
+        paused = true;
+        coldstart = false;
+      }, false);
+
+      document.addEventListener('resume', function() {
+        paused = false;
+        // Reset startup time at resume
+        startupTime = new Date();
+
+        if (waitingMessage) {
+          // Trigger notification
+          onNotification(waitingMessage);
+
+          // Reset waiting message
+          waitingMessage = null;
         }
-
       });
 
-      initPushUpdates(options.appName);
-    } else {
-      this.log('Push.Error: "Push.Configure may only be called once"');
-      throw new Error('Push.Configure may only be called once');
-    }
-  }
-}
+      var pushNotification = window.plugins.pushNotification;
 
-Push = new PushHandle();
+      if (device.platform == 'android' || device.platform == 'Android') {
+        // alert('Rig GCM');
+        try {
+
+          if (options.gcm && options.gcm.projectNumber) {
+            pushNotification.register(function(result) {
+              // Emit registered
+              self.emit('register', result);
+            }, function(error) {
+              // Emit error
+              self.emit('error', { type: 'gcm.cordova', error: error });
+            }, {
+              'senderID': ''+options.gcm.projectNumber,
+              'ecb': 'onNotificationGCM'
+            });
+          } else {
+            // throw new Error('senderID not set in options, required on android');
+            console.warn('WARNING: Push.init, No gcm.projectNumber set on android');
+          }
+
+        } catch(err) {
+          // console.log('There was an error starting up push');
+          // console.log('Error description: ' + err.message);
+          self.emit('error', { type: 'gcm.cordova', error: err.message });
+        }
+      } else {
+        // alert('Rig APN');
+
+        try {
+
+          pushNotification.register(function(token) {
+            // Got apn / ios token
+            self.emit('token', { apn: token });
+          }, function(error) {
+            // Emit error
+            self.emit('error', { type: 'apn.cordova', error: error });
+          }, {
+            'badge': ''+options.badge,
+            'sound': ''+options.sound,
+            'alert': ''+options.alert,
+            'ecb': 'onNotificationAPN'
+          }); // required!
+        } catch(err) {
+          // console.log('There was an error starting up push');
+          // console.log('Error description: ' + err.message);
+          self.emit('error', { type: 'apn.cordova', error: err.message });
+        }
+      }
+
+    }, false);
+
+
+  });
+
+}; // EO Push

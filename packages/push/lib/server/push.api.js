@@ -8,7 +8,7 @@
 
 // getText / getBinary
 
-Push.setBadge = function(/* id, count */) {
+Push.setBadge = function(id, count) {
     // throw new Error('Push.setBadge not implemented on the server');
 };
 
@@ -18,28 +18,23 @@ Push.Configure = function(options) {
     var self = this;
     // https://npmjs.org/package/apn
 
-    // After requesting the certificate from Apple, export your private key as
-    // a .p12 file anddownload the .cer file from the iOS Provisioning Portal.
+    // After requesting the certificate from Apple, export your private key as a .p12 file and download the .cer file from the iOS Provisioning Portal.
 
     // gateway.push.apple.com, port 2195
     // gateway.sandbox.push.apple.com, port 2195
 
-    // Now, in the directory containing cert.cer and key.p12 execute the
-    // following commands to generate your .pem files:
+    // Now, in the directory containing cert.cer and key.p12 execute the following commands to generate your .pem files:
     // $ openssl x509 -in cert.cer -inform DER -outform PEM -out cert.pem
     // $ openssl pkcs12 -in key.p12 -out key.pem -nodes
 
     // Block multiple calls
-    if (isConfigured) {
+    if (isConfigured)
       throw new Error('Push.Configure should not be called more than once!');
-    }
 
     isConfigured = true;
 
     // Add debug info
-    if (Push.debug) {
-      console.log('Push.Configure', options);
-    }
+    if (Push.debug) console.log('Push.Configure', options);
 
     // This function is called when a token is replaced on a device - normally
     // this should not happen, but if it does we should take action on it
@@ -47,26 +42,23 @@ Push.Configure = function(options) {
         // console.log('Replace token: ' + currentToken + ' -- ' + newToken);
         // If the server gets a token event its passing in the current token and
         // the new value - if new value is undefined this empty the token
-        self.emitState('token', currentToken, newToken);
+        self.emit('token', currentToken, newToken);
     };
 
     // Rig the removeToken callback
     _removeToken = function(token) {
         // console.log('Remove token: ' + token);
         // Invalidate the token
-        self.emitState('token', token, null);
+        self.emit('token', token, null);
     };
 
 
     if (options.apn) {
-        if (Push.debug) {
-          console.log('Push: APN configured');
-        }
+        if (Push.debug) console.log('Push: APN configured');
 
         // Allow production to be a general option for push notifications
-        if (options.production === Boolean(options.production)) {
+        if (options.production === !!options.production)
           options.apn.production = options.production;
-        }
 
         // Give the user warnings about development settings
         if (options.apn.development) {
@@ -83,14 +75,13 @@ Push.Configure = function(options) {
           // Warn about gateway configurations - it's more a guide
           if (options.apn.gateway) {
 
-              if (options.apn.gateway === 'gateway.sandbox.push.apple.com') {
+              if (options.apn.gateway == 'gateway.sandbox.push.apple.com') {
                   // Using the development sandbox
                   console.warn('WARNING: Push APN is in development mode');
-              } else if (options.apn.gateway === 'gateway.push.apple.com') {
+              } else if (options.apn.gateway == 'gateway.push.apple.com') {
                   // In production - but warn if we are running on localhost
                   if (/http:\/\/localhost/.test(Meteor.absoluteUrl())) {
-                      console.warn('WARNING: Push APN is configured to production mode - but server is running' +
-                        ' from localhost');
+                      console.warn('WARNING: Push APN is configured to production mode - but server is running from localhost');
                   }
               } else {
                   // Warn about gateways we dont know about
@@ -100,8 +91,7 @@ Push.Configure = function(options) {
           } else {
               if (options.apn.production) {
                   if (/http:\/\/localhost/.test(Meteor.absoluteUrl())) {
-                      console.warn('WARNING: Push APN is configured to production mode - but server is running' +
-                        ' from localhost');
+                      console.warn('WARNING: Push APN is configured to production mode - but server is running from localhost');
                   }
               } else {
                   console.warn('WARNING: Push APN is in development mode');
@@ -111,33 +101,18 @@ Push.Configure = function(options) {
         }
 
         // Check certificate data
-        if (!options.apn.certData || !options.apn.certData.length) {
-          console.error('ERROR: Push server could not find certData');
-        }
+        if (!options.apn['certData'] || !options.apn['certData'].length)
+            console.error('ERROR: Push server could not find certData');
 
         // Check key data
-        if (!options.apn.keyData || !options.apn.keyData.length) {
-          console.error('ERROR: Push server could not find keyData');
-        }
+        if (!options.apn['keyData'] || !options.apn['keyData'].length)
+            console.error('ERROR: Push server could not find keyData');
 
         // Rig apn connection
         var apn = Npm.require('apn');
         var apnConnection = new apn.Connection( options.apn );
 
-        // Listen to transmission errors - should handle the same way as feedback.
-        apnConnection.on('transmissionError', Meteor.bindEnvironment(function (errCode, notification, recipient) {
-          if (Push.debug) {
-            console.log('Got error code %d for token %s', errCode, notification.token);
-          }
-          if ([2, 5, 8].indexOf(errCode) >= 0) {
 
-
-            // Invalid token errors...
-            _removeToken({
-              apn: notification.token
-            });
-          }
-        }));
         // XXX: should we do a test of the connection? It would be nice to know
         // That the server/certificates/network are correct configured
 
@@ -150,12 +125,7 @@ Push.Configure = function(options) {
         // shutdown/close it.
 
         self.sendAPN = function(userToken, notification) {
-            if (Match.test(notification.apn, Object)) {
-              notification = _.extend({}, notification, notification.apn);
-            }
-
-            // console.log('sendAPN', notification.from, userToken, notification.title, notification.text,
-            // notification.badge, notification.priority);
+            // console.log('sendAPN', notification.from, userToken, notification.title, notification.text, notification.badge, notification.priority);
             var priority = (notification.priority || notification.priority === 0)? notification.priority : 10;
 
             var myDevice = new apn.Device(userToken);
@@ -163,27 +133,8 @@ Push.Configure = function(options) {
             var note = new apn.Notification();
 
             note.expiry = Math.floor(Date.now() / 1000) + 3600; // Expires 1 hour from now.
-            if (typeof notification.badge !== 'undefined') {
-              note.badge = notification.badge;
-            }
-            if (typeof notification.sound !== 'undefined') {
-              note.sound = notification.sound;
-            }
-            //console.log(notification.contentAvailable);
-            //console.log("lala2");
-            //console.log(notification);
-            if (typeof notification.contentAvailable !== 'undefined') {
-              //console.log("lala");
-              note.setContentAvailable(notification.contentAvailable);
-              //console.log(note);
-            }
-
-          // adds category support for iOS8 custom actions as described here:
-            // https://developer.apple.com/library/ios/documentation/NetworkingInternet/Conceptual/
-            // RemoteNotificationsPG/Chapters/IPhoneOSClientImp.html#//apple_ref/doc/uid/TP40008194-CH103-SW36
-            if (typeof notification.category !== 'undefined') {
-              note.category = notification.category;
-            }
+            if (typeof notification.badge !== 'undefined') note.badge = notification.badge;
+            if (typeof notification.sound !== 'undefined') note.sound = notification.sound;
 
             note.alert = notification.text;
             // Allow the user to set payload data
@@ -192,10 +143,6 @@ Push.Configure = function(options) {
             note.payload.messageFrom = notification.from;
             note.priority = priority;
 
-
-            // Store the token on the note so we can reference it if there was an error
-            note.token = userToken;
-
             // console.log('I:Send message to: ' + userToken + ' count=' + count);
 
             apnConnection.pushNotification(note, myDevice);
@@ -203,34 +150,25 @@ Push.Configure = function(options) {
         };
 
 
-        var initFeedback = function () {
+        var initFeedback = function() {
             var apn = Npm.require('apn');
             // console.log('Init feedback');
             var feedbackOptions = {
-                'batchFeedback': true,
-
-                // Time in SECONDS
-                'interval': 5,
-                production: !options.apn.development,
-                cert: options.certData,
-                key: options.keyData,
-                passphrase: options.passphrase
+                "batchFeedback": true,
+                "interval": 1000,
+                'address': 'feedback.push.apple.com'
             };
 
             var feedback = new apn.Feedback(feedbackOptions);
-            feedback.on('feedback', function (devices) {
-                devices.forEach(function (item) {
+            feedback.on("feedback", function(devices) {
+                devices.forEach(function(item) {
                     // Do something with item.device and item.time;
                     // console.log('A:PUSH FEEDBACK ' + item.device + ' - ' + item.time);
                     // The app is most likely removed from the device, we should
                     // remove the token
-                    _removeToken({
-                        apn: item.device
-                    });
+                    _removeToken({ apn: item.device});
                 });
             });
-
-            feedback.start();
         };
 
         // Init feedback from apn server
@@ -241,31 +179,19 @@ Push.Configure = function(options) {
     } // EO ios notification
 
     if (options.gcm && options.gcm.apiKey) {
-        if (Push.debug) {
-          console.log('GCM configured');
-        }
+        if (Push.debug) console.log('GCM configured');
         //self.sendGCM = function(options.from, userTokens, options.title, options.text, options.badge, options.priority) {
         self.sendGCM = function(userTokens, notification) {
-            if (Match.test(notification.gcm, Object)) {
-              notification = _.extend({}, notification, notification.gcm);
-            }
-
             // Make sure userTokens are an array of strings
-            if (userTokens === ''+userTokens) {
-              userTokens = [userTokens];
-            }
+            if (userTokens === ''+userTokens) userTokens = [userTokens];
 
             // Check if any tokens in there to send
             if (!userTokens.length) {
-                if (Push.debug) {
-                  console.log('sendGCM no push tokens found');
-                }
+                if (Push.debug) console.log('sendGCM no push tokens found');
                 return;
             }
 
-            if (Push.debug) {
-              console.log('sendGCM', userTokens, notification);
-            }
+            if (Push.debug) console.log('sendGCM', userTokens, notification);
 
             var gcm = Npm.require('node-gcm');
             var Fiber = Npm.require('fibers');
@@ -277,15 +203,8 @@ Push.Configure = function(options) {
             data.message = notification.text;
 
             // Set extra details
-            if (typeof notification.badge !== 'undefined') {
-              data.msgcnt = notification.badge;
-            }
-            if (typeof notification.sound !== 'undefined') {
-              data.soundname = notification.sound;
-            }
-            if (typeof notification.notId !== 'undefined') {
-              data.notId = notification.notId;
-            }
+            if (typeof notification.badge !== 'undefined') data.msgcnt = notification.badge;
+            if (typeof notification.sound !== 'undefined') data.soundname = notification.sound;
 
             //var message = new gcm.Message();
             var message = new gcm.Message({
@@ -296,15 +215,11 @@ Push.Configure = function(options) {
                 data: data
             });
 
-            if (Push.debug) {
-              console.log('Create GCM Sender using "' + options.gcm.apiKey + '"');
-            }
+            if (Push.debug) console.log('Create GCM Sender using "' + options.gcm.apiKey + '"');
             var sender = new gcm.Sender(options.gcm.apiKey);
 
-            _.each(userTokens, function(value /*, key */) {
-                if (Push.debug) {
-                  console.log('A:Send message to: ' + value);
-                }
+            _.each(userTokens, function(value, key) {
+                if (Push.debug) console.log('A:Send message to: ' + value);
             });
 
             /*message.addData('title', title);
@@ -322,20 +237,14 @@ Push.Configure = function(options) {
 
             sender.send(message, userTokens, 5, function (err, result) {
                 if (err) {
-                    if (Push.debug) {
-                      console.log('ANDROID ERROR: result of sender: ' + result);
-                    }
+                    if (Push.debug) console.log('ANDROID ERROR: result of sender: ' + result);
                 } else {
-                    if (result === null) {
-                      if (Push.debug) {
-                        console.log('ANDROID: Result of sender is null');
-                      }
+                    if (result == null) {
+                      if (Push.debug) console.log('ANDROID: Result of sender is null');
                       return;
                     }
-                    if (Push.debug) {
-                      console.log('ANDROID: Result of sender: ' + JSON.stringify(result));
-                    }
-                    if (result.canonical_ids === 1 && userToken) { // jshint ignore:line
+                    if (Push.debug) console.log('ANDROID: Result of sender: ' + JSON.stringify(result));
+                    if (result.canonical_ids === 1 && userToken) {
 
                         // This is an old device, token is replaced
                         Fiber(function(self) {
@@ -348,7 +257,7 @@ Push.Configure = function(options) {
 
                         }).run({
                             oldToken: { gcm: userToken },
-                            newToken: { gcm: result.results[0].registration_id }, // jshint ignore:line
+                            newToken: { gcm: result.results[0].registration_id },
                             callback: _replaceToken
                         });
                         //_replaceToken({ gcm: userToken }, { gcm: result.results[0].registration_id });
@@ -394,16 +303,12 @@ Push.Configure = function(options) {
 
         Push.appCollection.find(query).forEach(function(app) {
 
-          if (Push.debug) {
-            console.log('send to token', app.token);
-          }
+          if (Push.debug) console.log('send to token', app.token);
 
             if (app.token.apn) {
               countApn.push(app._id);
                 // Send to APN
-                if (self.sendAPN) {
-                  self.sendAPN(app.token.apn, options);
-                }
+                if (self.sendAPN) self.sendAPN(app.token.apn, options);
 
             } else if (app.token.gcm) {
               countGcm.push(app._id);
@@ -411,9 +316,7 @@ Push.Configure = function(options) {
                 // Send to GCM
                 // We do support multiple here - so we should construct an array
                 // and send it bulk - Investigate limit count of id's
-                if (self.sendGCM) {
-                  self.sendGCM(app.token.gcm, options);
-                }
+                if (self.sendGCM) self.sendGCM(app.token.gcm, options);
 
             } else {
                 throw new Error('Push.send got a faulty query');
@@ -423,22 +326,20 @@ Push.Configure = function(options) {
 
         if (Push.debug) {
 
-          console.log('Push: Sent message "' + options.title + '" to ' + countApn.length + ' ios apps ' +
-            countGcm.length + ' android apps');
+          console.log('Push: Sent message "' + options.title + '" to ' + countApn.length + ' ios apps ' + countGcm.length + ' android apps');
 
           // Add some verbosity about the send result, making sure the developer
           // understands what just happened.
           if (!countApn.length && !countGcm.length) {
-            if (Push.appCollection.find().count() === 0) {
-              console.log('Push, GUIDE: The "Push.appCollection" is empty -' +
-                ' No clients have registred on the server yet...');
+            if (Push.appCollection.find().count() == 0) {
+              console.log('Push, GUIDE: The "Push.appCollection" is empty - No clients have registred on the server yet...');
             }
           } else if (!countApn.length) {
-            if (Push.appCollection.find({ 'token.apn': { $exists: true } }).count() === 0) {
+            if (Push.appCollection.find({ 'token.apn': { $exists: true } }).count() == 0) {
               console.log('Push, GUIDE: The "Push.appCollection" - No APN clients have registred on the server yet...');
             }
           } else if (!countGcm.length) {
-            if (Push.appCollection.find({ 'token.gcm': { $exists: true } }).count() === 0) {
+            if (Push.appCollection.find({ 'token.gcm': { $exists: true } }).count() == 0) {
               console.log('Push, GUIDE: The "Push.appCollection" - No GCM clients have registred on the server yet...');
             }
           }
@@ -452,59 +353,44 @@ Push.Configure = function(options) {
     };
 
     self.serverSend = function(options) {
-      options = options || { badge: 0 };
+      options = options || { badge: 0 };
       var query;
 
       // Check basic options
-      if (options.from !== ''+options.from) {
+      if (options.from !== ''+options.from)
         throw new Error('Push.send: option "from" not a string');
-      }
 
-      if (options.title !== ''+options.title) {
+      if (options.title !== ''+options.title)
         throw new Error('Push.send: option "title" not a string');
-      }
 
-      if (options.text !== ''+options.text) {
+      if (options.text !== ''+options.text)
         throw new Error('Push.send: option "text" not a string');
-      }
 
       if (options.token || options.tokens) {
 
         // The user set one token or array of tokens
         var tokenList = (options.token)? [options.token] : options.tokens;
 
-        if (Push.debug) {
-          console.log('Push: Send message "' + options.title + '" via token(s)', tokenList);
-        }
+        if (Push.debug) console.log('Push: Send message "' + options.title + '" via token(s)', tokenList);
 
         query = {
           $or: [
               // XXX: Test this query: can we hand in a list of push tokens?
-              { $and: [
-                  { token: { $in: tokenList } },
-                  // And is not disabled
-                  { enabled: { $ne: false }}
-                ]
-              },
+              { token: { $in: tokenList } },
               // XXX: Test this query: does this work on app id?
               { $and: [
                   { _in: { $in: tokenList } }, // one of the app ids
                   { $or: [
                       { 'token.apn': { $exists: true }  }, // got apn token
                       { 'token.gcm': { $exists: true }  }  // got gcm token
-                  ]},
-                  // And is not disabled
-                  { enabled: { $ne: false }}
-                ]
-              }
+                  ]}
+              ]}
           ]
         };
 
       } else if (options.query) {
 
-        if (Push.debug) {
-          console.log('Push: Send message "' + options.title + '" via query', options.query);
-        }
+        if (Push.debug) console.log('Push: Send message "' + options.title + '" via query', options.query);
 
         query = {
           $and: [
@@ -512,9 +398,7 @@ Push.Configure = function(options) {
               { $or: [
                   { 'token.apn': { $exists: true }  }, // got apn token
                   { 'token.gcm': { $exists: true }  }  // got gcm token
-              ]},
-              // And is not disabled
-              { enabled: { $ne: false }}
+              ]}
           ]
         };
       }
@@ -523,7 +407,7 @@ Push.Configure = function(options) {
       if (query) {
 
         // Convert to querySend and return status
-        return _querySend(query, options);
+        return _querySend(query, options)
 
       } else {
         throw new Error('Push.send: please set option "token"/"tokens" or "query"');
@@ -553,104 +437,88 @@ Push.Configure = function(options) {
     //
     var isSendingNotification = false;
 
-    if (options.sendInterval !== null) {
+    Meteor.setInterval(function() {
 
-      // This will require index since we sort notifications by createdAt
-      Push.notifications._ensureIndex({ createdAt: 1 });
+        if (!isSendingNotification) {
+            // Set send fence
+            isSendingNotification = true;
 
-      Meteor.setInterval(function() {
-
-          if (isSendingNotification) {
-              return;
-          }
-          // Set send fence
-          isSendingNotification = true;
-
-          // var countSent = 0;
-          var batchSize = options.sendBatchSize || 1;
-
-          // Find notifications that are not being or already sent
-          var pendingNotifications = Push.notifications.find({ $and: [
-                // Message is not sent
-                { sent : { $ne: true } },
-                // And not being sent by other instances
-                { sending: { $ne: true } },
-                // And not queued for future
-                { $or: [ { delayUntil: { $exists: false } }, { delayUntil:  { $lte: new Date() } } ] }
+            // Find one notification that is not being or already sent
+            var notification = Push.notifications.findOne({ $and: [
+              // Message is not sent
+              { sent : { $ne: true } },
+              // And not being sent by other instances
+              { sending: {$ne: true} },
             ]}, {
               // Sort by created date
-              sort: { createdAt: 1 },
-              limit: batchSize
+              sort: { createdAt: 1 }
             });
 
-          pendingNotifications.forEach(function(notification) {
-              // Reserve notification
-              var reserved = Push.notifications.update({ $and: [
-                // Try to reserve the current notification
-                { _id: notification._id },
-                // Make sure no other instances have reserved it
-                { sending: { $ne: true } }
-              ]}, {
-                $set: {
-                  // Try to reserve
-                  sending: true
-                }
-              });
+            // Check if we got any notifications to send
+            if (notification) {
 
-              // Make sure we only handle notifications reserved by this
-              // instance
-              if (reserved) {
-
-                // Check if query is set and is type String
-                if (notification.query && notification.query === ''+notification.query) {
-                  try {
-                    // The query is in string json format - we need to parse it
-                    notification.query = JSON.parse(notification.query);
-                  } catch(err) {
-                    // Did the user tamper with this??
-                    throw new Error('Push: Error while parsing query string, Error: ' + err.message);
+                // Reserve notification
+                var reserved = Push.notifications.update({ $and: [
+                  // Try to reserve the current notification
+                  { _id: notification._id },
+                  // Make sure no other instances have reserved it
+                  { sending: { $ne: true } }
+                ]}, {
+                  $set: {
+                    // Try to reserve
+                    sending: true
                   }
-                }
+                });
 
-                // Send the notification
-                var result = Push.serverSend(notification);
+                // Make sure we only handle notifications reserved by this
+                // instance
+                if (reserved) {
 
-                if (!options.keepNotifications) {
-                    // Pr. Default we will remove notifications
-                    Push.notifications.remove({ _id: notification._id });
-                } else {
+                  // Check if query is set and is type String
+                  if (notification.query && notification.query === ''+notification.query) {
+                    try {
+                      // The query is in string json format - we need to parse it
+                      notification.query = JSON.parse(notification.query);
+                    } catch(err) {
+                      // Did the user tamper with this??
+                      throw new Error('Push: Error while parsing query string, Error: ' + err.message);
+                    }
+                  }
 
-                    // Update the notification
-                    Push.notifications.update({ _id: notification._id }, {
-                        $set: {
-                          // Mark as sent
-                          sent: true,
-                          // Set the sent date
-                          sentAt: new Date(),
-                          // Count
-                          count: result,
-                          // Not being sent anymore
-                          sending: false
-                        }
-                    });
+                  // Send the notification
+                  var result = Push.serverSend(notification);
 
-                }
+                  if (!options.keepNotifications) {
+                      // Pr. Default we will remove notifications
+                      Push.notifications.remove({ _id: notification._id });
+                  } else {
 
-                // Emit the send
-                self.emit('send', { notification: notification._id, result: result });
+                      // Update the notification
+                      Push.notifications.update({ _id: notification._id }, {
+                          $set: {
+                            // Mark as sent
+                            sent: true,
+                            // Set the sent date
+                            sentAt: new Date(),
+                            // Count
+                            count: result,
+                            // Not being sent anymore
+                            sending: false
+                          }
+                      });
 
-              } // Else could not reserve
+                  }
 
-          }); // EO forEach
+                  // Emit the send
+                  self.emit('send', { notification: notification._id, result: result });
 
-          // Remove the send fence
-          isSendingNotification = false;
-      }, options.sendInterval || 15000); // Default every 15th sec
+                } // Else could not reserve
 
-    } else {
-      if (Push.debug) {
-        console.log('Push: Send server is disabled');
-      }
-    }
+            }
+
+            // Remove the send fence
+            isSendingNotification = false;
+        }
+    }, options.sendInterval || 15000); // Default every 15'the sec
 
 };
