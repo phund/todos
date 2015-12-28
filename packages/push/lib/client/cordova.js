@@ -43,7 +43,7 @@ class PushHandle extends EventState {
       }
       if (/android/i.test(device.platform)) {
         this.log('Push.setBadge:', count);
-        cordova.plugins.notification.badge.set(notification.count);
+        cordova.plugins.notification.badge.set(count);
       }
     });
   }
