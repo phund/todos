@@ -13,7 +13,7 @@ Npm.depends({
 });
 
 Cordova.depends({
-  'com.phonegap.plugins.PushPlugin': '1.5.2',
+  'phonegap-plugin-push': '1.5.2',
   'de.appplant.cordova.plugin.badge': '0.7.1'
 });
 
