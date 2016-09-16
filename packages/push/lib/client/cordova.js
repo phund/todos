@@ -18,6 +18,9 @@ Push.setBadge = function(count) {
     // Helper
     var pushNotification = window.plugins.pushNotification;
 
+    console.log("*******Device ready (setBadge) ***********");
+
+
     // If the set application badge is available
     if (typeof pushNotification.setApplicationIconBadgeNumber == 'function') {
       // Set the badge
@@ -107,6 +110,7 @@ onNotificationAPN = function(e) {
 // handle GCM notifications for Android and Fire OS
 onNotificationGCM = function(e) {
   // alert('onNotificationGCM ' + JSON.stringify(e));
+  console.log("******* onNotificationGCM ***********");
 
   switch( e.event ) {
     case 'registered':
@@ -165,6 +169,7 @@ var rigDefaultEventListeners = function(options) {
 
   // Set default badge behaviour
   if (options.badge === true) Push.addListener('badge', function(notification) {
+    console.log("******* (Push.addListener('badge') *********");
     Push.setBadge(notification.badge);
   });
 
